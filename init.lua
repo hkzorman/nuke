@@ -17,7 +17,6 @@ local function activate_if_tnt(nodename, nodepos, tntpos, tntradius)
 	local mult2 = 3
 	-- vel = (nodepos - tntpos) * mult2 + (mult * tntradius)
 	obj:setvelocity(vector.add(vector.multiply(vector.subtract(nodepos, tntpos), mult2), vector.multiply(mult, tntradius)))
-	obj:get_luaentity().timer = math.random(8.5,9.5)
 end
 
 local function apply_tnt_physics(tntpos, tntradius)
@@ -40,7 +39,7 @@ end
 
 
 local function register_tnt(nodename, desc, tex, on_explode)
-	local explodetime = 0 -- seconds
+	local explodetime = 10 -- seconds
 	local texfinal
 	if type(tex) == "table" then
 		texfinal = tex
@@ -160,85 +159,7 @@ local function on_explode_normal(pos, range)
 	
 	apply_tnt_physics(pos, range)
 end
---Do map chunk sections to not overfill memory
-local function on_explode_massive(pos, range)
-	minetest.sound_play("nuke_explode", {pos = pos, gain = 1.0, max_hear_distance = 32})
-	local nd = minetest.registered_nodes[minetest.get_node(pos).name]
-	if nd ~= nil and nd.groups.water ~= nil then
-		return -- cancel explosion
-	end
-	
-	local block_division = 5 -- how it divides chunks, add this to the max to make squares
-	local block_radius   = math.ceil(range/block_division)
-	
-	for block_z = -block_radius-1,block_radius do
-	for block_y = -block_radius-1,block_radius do
-	for block_x = -block_radius-1,block_radius do
-		--this is for setting node in voxelmanip
-		--{x=pos.x+(block_x*block_division)+x,y=pos.y+(block_y*block_division)+y,z=pos.z+(block_z*block_division)+z}
-		local min = {x=pos.x+(block_x*block_division),y=pos.y+(block_y*block_division),z=pos.z+(block_z*block_division)}
-		local max = {x=pos.x+(block_x*block_division)+block_division,y=pos.y+(block_y*block_division)+block_division,z=pos.z+(block_z*block_division)+block_division}
-		local vm = minetest.get_voxel_manip()	
-		local emin, emax = vm:read_from_map(min,max)
-		local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
-		local data = vm:get_data()
-		
-		local air = minetest.get_content_id("air")
-		
-		for z = 1,block_division do
-		for x = 1,block_division do
-		for y = 1,block_division do
-			local p_pos = area:index(pos.x+(block_x*block_division)+x,pos.y+(block_y*block_division)+y,pos.z+(block_z*block_division)+z)
-			--local n = minetest.get_name_from_content_id(data[p_pos])
-			--if n ~= "air" then
-				--activate_if_tnt(n, nodepos, pos, range)
-				data[p_pos] = air
-			--end
-			--minetest.set_node({x=pos.x+(block_x*block_division)+x,y=pos.y+(block_y*block_division)+y,z=pos.z+(block_z*block_division)+z},{name="default:glass"})
-		end
-		end
-		end
-		
-		vm:set_data(data)
-		vm:write_to_map()
-		vm:update_map()
-	end
-	end
-	end
-	
-	--[[
-	local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
-	local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
-	local vm = minetest.get_voxel_manip()	
-	local emin, emax = vm:read_from_map(min,max)
-	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
-	local data = vm:get_data()
-	
-	local air = minetest.get_content_id("air")
-	
-	for z=-range, range do
-	for y=-range, range do
-	for x=-range, range do
-		--if x*x+y*y+z*z <= range*range + range then
-			--local nodepos = vector.add(pos, {x=x, y=y, z=z})
-			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
-			local n = minetest.get_name_from_content_id(data[p_pos])
-			if n ~= "air" then
-				--activate_if_tnt(n, nodepos, pos, range)
-				data[p_pos] = air
-			end
-		--end
-	end
-	end
-	end
-	--vm:calculate_lighting()
-	vm:set_data(data)
-	vm:write_to_map()
-	vm:update_map()
-	
-	apply_tnt_physics(pos, range)
-	]]--
-end
+
 local function on_explode_split(pos, range, entname)
 	minetest.sound_play("nuke_explode", {pos = pos, gain = 1.0, max_hear_distance = 16})
 	for x=-range, range do
@@ -272,8 +193,7 @@ register_tnt(
 	"nuke:iron_tntx", "Extreme Iron TNT",
 	{"nuke_iron_tnt_top.png", "nuke_iron_tnt_bottom.png", "nuke_iron_tnt_side_x.png"},
 	function(pos)
-		on_explode_normal(pos, 40)
-		--on_explode_split(pos, 2, "nuke:iron_tnt")
+		on_explode_normal(pos, 60)
 	end
 )
 
@@ -306,8 +226,7 @@ register_tnt(
 	"nuke:mese_tntx", "Extreme Mese TNT",
 	{"nuke_mese_tnt_top.png", "nuke_mese_tnt_bottom.png", "nuke_mese_tnt_side_x.png"},
 	function(pos)
-		on_explode_massive(pos, 10)
-		--on_explode_split(pos, 2, "nuke:mese_tnt")
+		on_explode_normal(pos, 120)
 	end
 )
 
