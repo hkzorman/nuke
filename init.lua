@@ -33,6 +33,7 @@ local function apply_tnt_physics(tntpos, tntradius)
 			end
 			-- newvel = (objpos - tntpos) + (mult * tntradius) + objvel
 			obj:setvelocity(vector.add(vector.subtract(obj:getpos(), tntpos), vector.add(vector.multiply(mult, tntradius), obj:getvelocity())))
+			obj:get_luaentity().timer = math.random(8.5,9.5)
 		end
 	end
 end
