@@ -17,6 +17,7 @@ local function activate_if_tnt(nodename, nodepos, tntpos, tntradius)
 	local mult2 = 3
 	-- vel = (nodepos - tntpos) * mult2 + (mult * tntradius)
 	obj:setvelocity(vector.add(vector.multiply(vector.subtract(nodepos, tntpos), mult2), vector.multiply(mult, tntradius)))
+	obj:get_luaentity().timer = math.random(8.5,9.5)
 end
 
 local function apply_tnt_physics(tntpos, tntradius)
@@ -128,20 +129,35 @@ local function on_explode_normal(pos, range)
 		return -- cancel explosion
 	end
 	
-	for x=-range, range do
-	for y=-range, range do
+	local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
+	local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
+	local vm = minetest.get_voxel_manip()	
+	local emin, emax = vm:read_from_map(min,max)
+	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
+	local data = vm:get_data()
+	
+	local air = minetest.get_content_id("air")
+	
 	for z=-range, range do
+	for y=-range, range do
+	for x=-range, range do
 		if x*x+y*y+z*z <= range*range + range then
 			local nodepos = vector.add(pos, {x=x, y=y, z=z})
-			local n = minetest.get_node(nodepos)
-			if n.name ~= "air" then
-				activate_if_tnt(n.name, nodepos, pos, range)
-				minetest.remove_node(nodepos)
+			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
+			local n = minetest.get_name_from_content_id(data[p_pos])
+			if n ~= "air" then
+				activate_if_tnt(n, nodepos, pos, range)
+				data[p_pos] = air
 			end
 		end
 	end
 	end
 	end
+	--vm:calculate_lighting()
+	vm:set_data(data)
+	vm:write_to_map()
+	vm:update_map()
+	
 	apply_tnt_physics(pos, range)
 end
 
@@ -178,7 +194,8 @@ register_tnt(
 	"nuke:iron_tntx", "Extreme Iron TNT",
 	{"nuke_iron_tnt_top.png", "nuke_iron_tnt_bottom.png", "nuke_iron_tnt_side_x.png"},
 	function(pos)
-		on_explode_split(pos, 2, "nuke:iron_tnt")
+		on_explode_normal(pos, 40)
+		--on_explode_split(pos, 2, "nuke:iron_tnt")
 	end
 )
 
@@ -211,7 +228,8 @@ register_tnt(
 	"nuke:mese_tntx", "Extreme Mese TNT",
 	{"nuke_mese_tnt_top.png", "nuke_mese_tnt_bottom.png", "nuke_mese_tnt_side_x.png"},
 	function(pos)
-		on_explode_split(pos, 2, "nuke:mese_tnt")
+		on_explode_normal(pos, 170)
+		--on_explode_split(pos, 2, "nuke:mese_tnt")
 	end
 )
 
