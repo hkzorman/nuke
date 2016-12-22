@@ -137,20 +137,45 @@ local function on_explode_normal(pos, range)
 		apply_tnt_physics(pos, range)
 		return -- cancel explosion
 	end
+	
+	local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
+	local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
+	local vm = minetest.get_voxel_manip()	
+	local emin, emax = vm:read_from_map(min,max)
+	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
+	local data = vm:get_data()
+	local air = minetest.get_content_id("air")
+
+	local content_id = minetest.get_name_from_content_id
+	
 	for x=-range, range do
 	for y=-range, range do
 	for z=-range, range do
-		if x*x+y*y+z*z <= range * range + range then
-			local nodepos = vector.add(pos, {x=x, y=y, z=z})
-			local n = minetest.get_node(nodepos)
-			if n.name ~= "air" then
-				activate_if_tnt(n.name, nodepos, pos, range)
-				minetest.remove_node(nodepos)
+		if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
+			--local nodepos = vector.add(pos, {x=x, y=y, z=z})
+			
+			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
+			
+			
+			
+			--local n = minetest.get_node(nodepos)
+			local n = content_id(data[p_pos])
+			
+			--if n.name ~= "air" then
+			if n ~= "air" then
+				activate_if_tnt(n, nodepos, pos, range)
+				--minetest.remove_node(nodepos)
+				data[p_pos] = air
 			end
 		end
 	end
 	end
 	end
+	
+	vm:set_data(data)
+	vm:write_to_map()
+	vm:update_map()
+	
 	apply_tnt_physics(pos, range)
 end
 
