@@ -1,4 +1,4 @@
--- Nuke Mod 2.0 by sfan5
+-- Nuke Mod 2.1 by sfan5
 -- code licensed under MIT
 
 local all_tnt = {}
@@ -8,15 +8,23 @@ local function spawn_tnt(pos, entname)
 	return minetest.add_entity(pos, entname)
 end
 
+local function calculate_velocity(distance, tntradius, mult)
+	-- (d is the distance vector)
+	--            tntradius - | d |
+	-- vel = d * ------------------- * mult
+	--              tntradius - 1
+	return vector.multiply(vector.multiply(distance, (tntradius - vector.length(distance)) / (tntradius - 1)), mult)
+end
+
 local function activate_if_tnt(nodename, nodepos, tntpos, tntradius)
+	local explodetime_short = 4 -- seconds
+	local explodetime_vary = 1.5
 	if table.indexof(all_tnt, nodename) == -1 then
 		return
 	end
 	local obj = spawn_tnt(nodepos, nodename)
-	local mult = {x=0.25, y=0.333, z=0.25}
-	local mult2 = 3
-	-- vel = (nodepos - tntpos) * mult2 + (mult * tntradius)
-	obj:setvelocity(vector.add(vector.multiply(vector.subtract(nodepos, tntpos), mult2), vector.multiply(mult, tntradius)))
+	obj:setvelocity(calculate_velocity(vector.subtract(nodepos, tntpos), tntradius, {x=3, y=5, z=3}))
+	obj:get_luaentity().timer = explodetime_short + math.random(-explodetime_vary, explodetime_vary)
 end
 
 local function apply_tnt_physics(tntpos, tntradius)
@@ -27,13 +35,12 @@ local function apply_tnt_physics(tntpos, tntradius)
 				obj:set_hp(obj:get_hp() - 1)
 			end
 		else
-			local mult = {x=0.25, y=0.5, z=0.25}
+			local mult = {x=1.5, y=2.5, z=1.5}
 			if table.indexof(all_tnt, obj:get_entity_name()) ~= -1 then
-				mult = vector.multiply(mult, 2) -- apply more ḱnockback to tnt entities
+				mult = vector.multiply(mult, 2) -- apply more knockback to tnt entities
 			end
-			-- newvel = (objpos - tntpos) + (mult * tntradius) + objvel
-			obj:setvelocity(vector.add(vector.subtract(obj:getpos(), tntpos), vector.add(vector.multiply(mult, tntradius), obj:getvelocity())))
-			obj:get_luaentity().timer = math.random(8.5,9.5)
+			local vel = vector.add(obj:getvelocity(), calculate_velocity(vector.subtract(obj:getpos(), tntpos), tntradius, mult))
+			obj:setvelocity(vel)
 		end
 	end
 end
@@ -56,6 +63,7 @@ local function register_tnt(nodename, desc, tex, on_explode)
 				action_on = function(pos, node)
 					minetest.remove_node(pos)
 					spawn_tnt(pos, node.name)
+					nodeupdate(pos)
 				end,
 				action_off = function(pos, node) end,
 				action_change = function(pos, node) end,
@@ -126,38 +134,23 @@ local function on_explode_normal(pos, range)
 	minetest.sound_play("nuke_explode", {pos = pos, gain = 1.0, max_hear_distance = 32})
 	local nd = minetest.registered_nodes[minetest.get_node(pos).name]
 	if nd ~= nil and nd.groups.water ~= nil then
+		apply_tnt_physics(pos, range)
 		return -- cancel explosion
 	end
-	
-	local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
-	local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
-	local vm = minetest.get_voxel_manip()	
-	local emin, emax = vm:read_from_map(min,max)
-	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
-	local data = vm:get_data()
-	
-	local air = minetest.get_content_id("air")
-	
-	for z=-range, range do
-	for y=-range, range do
 	for x=-range, range do
-		if x*x+y*y+z*z <= range*range + range then
+	for y=-range, range do
+	for z=-range, range do
+		if x*x+y*y+z*z <= range * range + range then
 			local nodepos = vector.add(pos, {x=x, y=y, z=z})
-			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
-			local n = minetest.get_name_from_content_id(data[p_pos])
-			if n ~= "air" then
-				activate_if_tnt(n, nodepos, pos, range)
-				data[p_pos] = air
+			local n = minetest.get_node(nodepos)
+			if n.name ~= "air" then
+				activate_if_tnt(n.name, nodepos, pos, range)
+				minetest.remove_node(nodepos)
 			end
 		end
 	end
 	end
 	end
-	--vm:calculate_lighting()
-	vm:set_data(data)
-	vm:write_to_map()
-	vm:update_map()
-	
 	apply_tnt_physics(pos, range)
 end
 
@@ -165,7 +158,7 @@ local function on_explode_split(pos, range, entname)
 	minetest.sound_play("nuke_explode", {pos = pos, gain = 1.0, max_hear_distance = 16})
 	for x=-range, range do
 	for z=-range, range do
-		if x*x+z*z <= range * range + range then
+		if x*x+z*z <= range * range then
 			local nodepos = vector.add(pos, {x=x, y=0, z=z})
 			minetest.add_entity(nodepos, entname)
 		end
@@ -194,7 +187,7 @@ register_tnt(
 	"nuke:iron_tntx", "Extreme Iron TNT",
 	{"nuke_iron_tnt_top.png", "nuke_iron_tnt_bottom.png", "nuke_iron_tnt_side_x.png"},
 	function(pos)
-		on_explode_normal(pos, 60)
+		on_explode_split(pos, 3, "nuke:iron_tnt")
 	end
 )
 
@@ -227,7 +220,7 @@ register_tnt(
 	"nuke:mese_tntx", "Extreme Mese TNT",
 	{"nuke_mese_tnt_top.png", "nuke_mese_tnt_bottom.png", "nuke_mese_tnt_side_x.png"},
 	function(pos)
-		on_explode_normal(pos, 120)
+		on_explode_split(pos, 3, "nuke:mese_tnt")
 	end
 )
 
